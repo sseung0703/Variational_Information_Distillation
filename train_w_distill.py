@@ -141,7 +141,7 @@ def main(_):
                                                               is_training_ph : False})
                         sum_val_accuracy.append(acc)
                         
-                    sum_train_accuracy = np.mean(sum_train_accuracy)*100 if (step*batch_size)//dataset_len>init_epoch else 1.
+                    sum_train_accuracy = np.mean(sum_train_accuracy)*100
                     sum_val_accuracy= np.mean(sum_val_accuracy)*100
                     tf.logging.info('Epoch %s Step %s - train_Accuracy : %.2f%%  val_Accuracy : %.2f%%'
                                     %(str(epoch_).rjust(3, '0'), str(step).rjust(6, '0'), 

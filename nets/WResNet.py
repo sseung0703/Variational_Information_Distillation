@@ -47,7 +47,7 @@ def WResNet(image, label, scope, is_training, Distill = None):
     else:
         depth = 16; widen_factor = 4
     
-    nChannels = [16, 16*widen_factor, 32*widen_factor, 64*widen_factor]
+    nChannels = [16, 32*widen_factor, 64*widen_factor, 128*widen_factor]
     stride = [1,2,2]
     n = (depth-4)//6
     
@@ -70,40 +70,31 @@ def WResNet(image, label, scope, is_training, Distill = None):
                 end_points['Logits'] = logits
         
     if Distill is not None:
-        if Distill == 'DML':
-            teacher_trainable = True
-            weight_decay = 5e-4
-            teacher_is_training = tf.logical_not(is_training)
-        else:
-            teacher_trainable = False
-            weight_decay = 0.
-            teacher_is_training = False
+        teacher_trainable = False
+        teacher_is_training = False
             
-        arg_scope = WResNet_arg_scope_teacher(weight_decay=weight_decay)
+        arg_scope = WResNet_arg_scope_teacher()
             
         with tf.variable_scope('Teacher'):
             with tcf.arg_scope(arg_scope):
-                with tcf.arg_scope([tcl.conv2d, tcl.fully_connected, tcl.batch_norm], trainable = teacher_trainable):
-                    with tcf.arg_scope([tcl.dropout, tcl.batch_norm], is_training = teacher_is_training):
-                        depth = 40; widen_factor = 4 # teacher
-                        nChannels = [16, 16*widen_factor, 32*widen_factor, 64*widen_factor]
-                        n = (depth-4)//6
-                        stride = [1,2,2]
-                        
-                        tch = tcl.conv2d(image, nChannels[0], [3,3], 1, scope='conv0')
-                        for i in range(3):            
-                            tch = NetworkBlock(tch, n, nChannels[1+i], stride[i], name = 'WResblock%d'%i)
-                        tch = tcl.batch_norm(tch,scope='bn0')
-                        tf.add_to_collection('feat_noact', tch)
-                        tch = tf.nn.relu(tch)
-                        tf.add_to_collection('feat', tch)
-    
-                        fc = tf.reduce_mean(tch, [1,2])
-                        logits_tch = tcl.fully_connected(fc , label.get_shape().as_list()[-1], 
-                                                         biases_initializer = tf.zeros_initializer(),
-                                                         biases_regularizer = tcl.l2_regularizer(weight_decay) if weight_decay > 0. else None,
-                                                         scope = 'full')
-                        end_points['Logits_tch'] = logits_tch
+                depth = 40; widen_factor = 4 # teacher
+                nChannels = [16, 16*widen_factor, 32*widen_factor, 64*widen_factor]
+                n = (depth-4)//6
+                stride = [1,2,2]
+                
+                tch = tcl.conv2d(image, nChannels[0], [3,3], 1, scope='conv0')
+                for i in range(3):            
+                    tch = NetworkBlock(tch, n, nChannels[1+i], stride[i], name = 'WResblock%d'%i)
+                tch = tcl.batch_norm(tch,scope='bn0')
+                tf.add_to_collection('feat_noact', tch)
+                tch = tf.nn.relu(tch)
+                tf.add_to_collection('feat', tch)
+
+                fc = tf.reduce_mean(tch, [1,2])
+                logits_tch = tcl.fully_connected(fc , label.get_shape().as_list()[-1], 
+                                                 biases_initializer = tf.zeros_initializer(),
+                                                 scope = 'full')
+                end_points['Logits_tch'] = logits_tch
                         
         with tf.variable_scope('Distillation'):
             feats = tf.get_collection('feat')
@@ -130,12 +121,9 @@ def WResNet_arg_scope(weight_decay=0.0005):
             return arg_sc
             
 def WResNet_arg_scope_teacher(weight_decay=0.0005):
-    with tcf.arg_scope([tcl.conv2d, tcl.fully_connected], 
-                       weights_regularizer = tcl.l2_regularizer(weight_decay) if weight_decay > 0. else None,
+    with tcf.arg_scope([tcl.conv2d, tcl.fully_connected], weights_regularizer = None, trainable = False,
                        variables_collections=[tf.GraphKeys.GLOBAL_VARIABLES,'Teacher']):
-        with tcf.arg_scope([tcl.batch_norm], 
-                           param_regularizers={'gamma': tcl.l2_regularizer(weight_decay),
-                                               'beta' : tcl.l2_regularizer(weight_decay)} if weight_decay > 0. else None,
+        with tcf.arg_scope([tcl.batch_norm], param_regularizers=None, trainable = False, is_training = False,
                            variables_collections=[tf.GraphKeys.GLOBAL_VARIABLES,'Teacher']) as arg_sc:
             return arg_sc
             
