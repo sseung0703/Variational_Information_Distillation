@@ -5,13 +5,14 @@ import scipy.io as sio
 import numpy as np
 
 
-base_path = 'Test/test'
+base_path = 'Test/AT/at'
 for i in range(3):
-#for i in [1,3]:
     subprocess.call('python Variational_Information_Distillation/train_w_distill.py '
                    +'--train_dir=%s%d '%(base_path,i)
                    +'--model_name=WResNet '
-                   +'--Distillation=None',
+                   +'--main_scope=Student '
+                   +'--dataset=cifar10 '
+                   +'--Distillation=AT',
                     shell=True)
     print ('Training Done')
 
