@@ -47,7 +47,7 @@ Project of Reproducing "VID" involved in https://github.com/rp12-study/rp12-hub
   </tr>
 </table>
 <p align="center">
-  <img src="plots.png" width="600"><br>
+  <img src="plots.png"><br>
   <b>Experimental results of full dataset</b>  
 </p>
 
