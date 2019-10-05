@@ -13,7 +13,7 @@ Project of Reproducing "VID" involved in https://github.com/rp12-study/rp12-hub
 ## How to run
 
 ## Note that
-- ~~I found the author's code at https://github.com/ssahn0215/variational-information-distillation. However I'll not refer it, cause I want to check reproducibility of the paper.~~ I don't know why but the author delete his repository.
+- ~~I found the author's code at https://github.com/ssahn0215/variational-information-distillation. However I'll not refer it, cause I want to check reproducibility of the paper.~~ I don't know why but the author deleted his repository.
 - My experimental results are higher than the paper. I found that It is tough to make such a low performance like paper. For this, I removed gamma and regularization of batch normalization, and modify hyper-parameters to make training unstable.
 - The authors said "We choose four pairs of intermediate layers similarly to [31], each of which is located at the end of a group of residual blocks." but there are only three groups of residual blocks in WResNet. So I sense one more feature map after the first convolutional layer.
 - I'll not follow the author's configuration for comparative methods. Because their modification look somewhat awkward, unfair and not coinside with the proposed ways. Also, I think that for fair comparison should not modify the original author configutation whether good or not. It means that I'll only reprocude the author's method, VID.
