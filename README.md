@@ -43,7 +43,7 @@ Project of Reproducing "VID" involved in https://github.com/rp12-study/rp12-hub
     <td> 91.85</td><td> 91.60</td><td> 87.60</td><td> 87.26</td><td> 84.70</td><td> 84.94</td><td> 74.57</td><td> 73.40</td>
   </tr><tr>
 <td>VID</td>    
-    <td>      </td><td> 91.85</td><td>      </td><td> 89.73</td><td>      </td><td> 88.09</td><td>      </td><td> 81.59</td>
+    <td>  91.40</td><td> 91.85</td><td> 88.24</td><td> 89.73</td><td> 86.20</td><td> 88.09</td><td> 79.36</td><td> 81.59</td>
   </tr>
 </table>
 <p align="center">
@@ -52,5 +52,4 @@ Project of Reproducing "VID" involved in https://github.com/rp12-study/rp12-hub
 </p>
 
 ## TO DO
-- Check correctness of VID implementation and do experiments
-- edit README
+- Upgrade codes to TF2.0

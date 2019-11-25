@@ -12,26 +12,22 @@ def Optimizer_w_Distillation(class_loss, LR, global_step, Distillation):
         # make optimizer w/ learning rate scheduler
         optimize = tf.train.MomentumOptimizer(LR, 0.9, use_nesterov=True)
         if Distillation is None:
-            # training main-task
             total_loss = class_loss + tf.add_n(tf.losses.get_regularization_losses())
             tf.summary.scalar('loss/total_loss', total_loss)
             gradients  = optimize.compute_gradients(total_loss, var_list = variables)
             
         elif Distillation == 'Soft_logits':
-            # multi-task learning with alpha
-            total_loss = tf.add_n(tf.losses.get_regularization_losses())*0.7 + tf.get_collection('dist')[0]*0.3
+            total_loss = tf.add_n(tf.losses.get_regularization_losses()) + class_loss*0.7 + tf.get_collection('dist')[0]*0.3
             tf.summary.scalar('loss/total_loss', total_loss)
             gradients  = optimize.compute_gradients(total_loss, var_list = variables)
             
         elif Distillation in {'AT'}:
-            # simple multi-task learning
-            total_loss = class_loss + tf.add_n(tf.losses.get_regularization_losses()) + tf.get_collection('dist')[0]
+            total_loss = class_loss + tf.add_n(tf.losses.get_regularization_losses() + tf.get_collection('dist')) 
             tf.summary.scalar('loss/total_loss', total_loss)
             gradients  = optimize.compute_gradients(total_loss, var_list = variables)
+            
         elif Distillation in {'VID-I'}:
-            # simple multi-task learning
-            # regularization has to be scaled also
-            total_loss = (class_loss + tf.add_n(tf.losses.get_regularization_losses()))*.1 + tf.get_collection('dist')[0]
+            total_loss = class_loss*.1 + tf.add_n(tf.losses.get_regularization_losses())*.1 + tf.add_n(tf.get_collection('dist')) 
             tf.summary.scalar('loss/total_loss', total_loss)
             gradients  = optimize.compute_gradients(total_loss, var_list = variables)
             with tf.variable_scope('clip_grad'):

@@ -6,16 +6,16 @@ def FitNet(student, teacher):
      Fitnets:   Hints  for  thin  deep  nets.
      arXiv preprint arXiv:1412.6550, 2014.
     '''
-    def Guided(source, target):
-        with tf.variable_scope('Guided'):
+    def Guided(source, target, i):
+        with tf.variable_scope('Guided%d'%i):
             Ds = source.get_shape().as_list()[-1]
             Dt = target.get_shape().as_list()[-1]
             if Ds != Dt:
                 with tf.variable_scope('Map'):
-                    target = tf.contrib.layers.fully_connected(target, Ds, biases_initializer = None, trainable=True, scope = 'fc')
+                    source = tf.contrib.layers.fully_connected(source, Dt, biases_initializer = None, trainable=True, scope = 'fc')
             
             return tf.reduce_mean(tf.square(source-target))
-    return tf.add_n([Guided(std, tch) for i, std, tch in zip(range(len(student)), student, teacher)])
+    return tf.add_n([Guided(std, tch, i) for i, std, tch in zip(range(len(student)), student, teacher)])
 
 def Attention_transfer(student, teacher, beta = 1e3):
     '''
