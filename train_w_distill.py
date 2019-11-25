@@ -11,6 +11,7 @@ from nets import nets_factory
 from dataloader import Dataloader
 import op_util
 
+
 home_path = os.path.dirname(os.path.abspath(__file__))
 
 tf.app.flags.DEFINE_string('train_dir', 'test',
@@ -23,6 +24,8 @@ tf.app.flags.DEFINE_string('model_name', 'WResNet',
                            'Distillation method : ResNet, WResNet')
 tf.app.flags.DEFINE_string('main_scope', 'Teacher',
                            'networ`s scope')
+tf.app.flags.DEFINE_string('rate', 'full',
+                           'networ`s scope')
 FLAGS = tf.app.flags.FLAGS
 def main(_):
     ### define path and hyper-parameter
@@ -31,6 +34,9 @@ def main(_):
     batch_size = 128
     val_batch_size = 200
     train_epoch = 200
+    init_epoch = 40 if FLAGS.Distillation in {'FitNet'} else 0
+    
+    total_epoch = init_epoch + train_epoch
     weight_decay = 5e-4
 
     should_log          = 100
@@ -44,14 +50,18 @@ def main(_):
     train_images, train_labels, val_images, val_labels, pre_processing, teacher = Dataloader(FLAGS.dataset, home_path, FLAGS.model_name)
     num_label = int(np.max(train_labels)+1)
 
-    rate = 1.
-    if rate < 1:
+
+    if FLAGS.rate != '.full' and FLAGS.rate != 'full':
+        rate = float(FLAGS.rate)
         def slice(x, rate):
             return x[:int(x.shape[0]*rate)]
         idxes = np.hstack([slice(np.where(train_labels == i)[0], rate) for i in range(num_label)])
         train_images = train_images[idxes]
         train_labels = train_labels[idxes]
-        
+        init_epoch = int(init_epoch/rate)
+        train_epoch = int(train_epoch/rate)
+        total_epoch = init_epoch + train_epoch
+    
     dataset_len, *image_size = train_images.shape
 
     with tf.Graph().as_default() as graph:
@@ -68,16 +78,19 @@ def main(_):
         # make global step
         global_step = tf.train.create_global_step()
         epoch = tf.floor_div(tf.cast(global_step, tf.float32)*batch_size, dataset_len)
-        max_number_of_steps = int(dataset_len*train_epoch)//batch_size+1
+        max_number_of_steps = int(dataset_len*total_epoch)//batch_size+1
 
         # make learning rate scheduler
-        LR = learning_rate_scheduler(Learning_rate, [epoch, train_epoch], [0.3, 0.6, 0.8], 0.2)
+        LR = learning_rate_scheduler(Learning_rate, [epoch, init_epoch, train_epoch], [0.3, 0.6, 0.8], 0.2)
         
         ## load Net
         class_loss, accuracy = MODEL(FLAGS.model_name, FLAGS.main_scope, weight_decay, image, label, is_training_ph, Distillation = FLAGS.Distillation)
         
         #make training operator
-        train_op = op_util.Optimizer_w_Distillation(class_loss, LR, epoch, global_step, FLAGS.Distillation)
+        if FLAGS.Distillation in {'FitNet'}:
+            train_op, train_op_init = op_util.Optimizer_w_Initializer(class_loss, LR, global_step)
+        else:
+            train_op = op_util.Optimizer_w_Distillation(class_loss, LR, global_step, FLAGS.Distillation)
         
         ## collect summary ops for plotting in tensorboard
         summary_op = tf.summary.merge(tf.get_collection(tf.GraphKeys.SUMMARIES), name='summary_op')
@@ -98,7 +111,7 @@ def main(_):
         val_itr = len(val_labels)//val_batch_size
         logs = {'training_acc' : [], 'validation_acc' : []}
         with tf.Session(config=config) as sess:
-            if FLAGS.Distillation is not None:
+            if FLAGS.Distillation is not None and FLAGS.Distillation != 'DML':
                 global_variables  = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
                 n = 0
                 for v in global_variables:
@@ -118,10 +131,17 @@ def main(_):
                 start_time = time.time()
                 
                 ## feed data
-                tl, log, train_acc = sess.run([train_op, summary_op, accuracy],
-                                              feed_dict = {image_ph : train_images[idx[:batch_size]],
-                                                           label_ph : np.squeeze(train_labels[idx[:batch_size]]),
-                                                           is_training_ph : True})
+                if FLAGS.Distillation in {'FitNet'} and (step*batch_size)//dataset_len < init_epoch:
+                    tl, log, train_acc = sess.run([train_op_init, summary_op, accuracy],
+                                                  feed_dict = {image_ph : train_images[idx[:batch_size]],
+                                                               label_ph : np.squeeze(train_labels[idx[:batch_size]]),
+                                                               is_training_ph : True})
+                else:
+                    tl, log, train_acc = sess.run([train_op, summary_op, accuracy],
+                                                  feed_dict = {image_ph : train_images[idx[:batch_size]],
+                                                               label_ph : np.squeeze(train_labels[idx[:batch_size]]),
+                                                               is_training_ph : True})
+    
                 time_elapsed.append( time.time() - start_time )
                 total_loss.append(tl)
                 sum_train_accuracy.append(train_acc)
@@ -132,7 +152,7 @@ def main(_):
                     idx += idx_
                 
                 step += 1
-                if (step*batch_size)//dataset_len>=epoch_:
+                if (step*batch_size)//dataset_len>=init_epoch+epoch_:
                     ## do validation
                     sum_val_accuracy = []
                     for i in range(val_itr):
@@ -141,7 +161,7 @@ def main(_):
                                                               is_training_ph : False})
                         sum_val_accuracy.append(acc)
                         
-                    sum_train_accuracy = np.mean(sum_train_accuracy)*100
+                    sum_train_accuracy = np.mean(sum_train_accuracy)*100 if (step*batch_size)//dataset_len>init_epoch else 1.
                     sum_val_accuracy= np.mean(sum_val_accuracy)*100
                     tf.logging.info('Epoch %s Step %s - train_Accuracy : %.2f%%  val_Accuracy : %.2f%%'
                                     %(str(epoch_).rjust(3, '0'), str(step).rjust(6, '0'), 
@@ -152,6 +172,12 @@ def main(_):
                     logs['training_acc'].append(sum_train_accuracy)
                     logs['validation_acc'].append(sum_val_accuracy)
     
+                    if (step*batch_size)//dataset_len == init_epoch and FLAGS.Distillation in {'FitNet'}:
+                        #re-initialize Momentum for fair comparison w/ initialization and multi-task learning methods
+                        for v in global_variables:
+                            if v.name[:-len('Momentum:0')]=='Momentum:0':
+                                sess.run(v.assign(np.zeros(*v.get_shape().as_list()) ))
+                                
                     if step == max_number_of_steps:
                         train_writer.add_summary(result_log, train_epoch)
                     else:
@@ -192,17 +218,15 @@ def MODEL(model_name, scope, weight_decay, image, label, is_training, Distillati
     end_points = network_fn(image, label, scope, is_training=is_training, Distill=Distillation)
 
     loss = tf.losses.softmax_cross_entropy(label,end_points['Logits'])
-    if Distillation == 'DML':
-        tf.add_to_collection('teacher_class_loss',tf.losses.softmax_cross_entropy(label,end_points['Logits_tch']))
     accuracy = tf.contrib.metrics.accuracy(tf.cast(tf.argmax(end_points['Logits'], 1), tf.int32), tf.cast(tf.argmax(label, 1),tf.int32))
     return loss, accuracy
     
 def learning_rate_scheduler(Learning_rate, epochs, decay_point, decay_rate):
     with tf.variable_scope('learning_rate_scheduler'):
-        e, te = epochs
+        e, ie, te = epochs
         for i, dp in enumerate(decay_point):
-            Learning_rate = tf.cond(tf.greater_equal(e, int(te*dp)), lambda : Learning_rate*decay_rate, 
-                                                                     lambda : Learning_rate)
+            Learning_rate = tf.cond(tf.greater_equal(e, ie + int(te*dp)), lambda : Learning_rate*decay_rate, 
+                                                                          lambda : Learning_rate)
         tf.summary.scalar('learning_rate', Learning_rate)
         return Learning_rate
 
